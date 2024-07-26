@@ -15,7 +15,8 @@ fn main() -> io::Result<()> {
     let binding = Bump::new();
     let mut parser = Parser::new(lexer, &binding);
     let ast = parser.parse();
-    let ir_stream = Compiler::compile_program(ast);
+    let compiler_arena = Bump::new();
+    let ir_stream = Compiler::compile_program(ast, &compiler_arena);
     fs::write("main.chir", ir_stream.to_string())?;
     Ok(())
 }

@@ -25,23 +25,23 @@ checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "citadel-api"
-version = "0.0.11"
+version = "0.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa519a742cc1ba501accb7808a19e0e5ad80d64885ee308f83d498ca4855d399"
+checksum = "cc3da5905e1282ea281f2d5f7e9a1c9d4673f9e66b65650bddc9657d196cdf34"
 dependencies = [
  "citadel-backend",
- "citadel-frontend",
+ "citadel-frontend 0.0.12",
  "citadel-middleend",
 ]
 
 [[package]]
 name = "citadel-backend"
-version = "0.0.11"
+version = "0.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c32b05b2e064cf354b0bc05b20b5ba9488b285332c33ea25c274846775742f5b"
+checksum = "1a0f358172233558c1f1c73969fde327153fec2487566590d6e2b7b65a5f68f0"
 dependencies = [
  "bumpalo",
- "citadel-frontend",
+ "citadel-frontend 0.0.12",
 ]
 
 [[package]]
@@ -51,12 +51,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26a5677a0484a9303cfa383c6e006b68824e2d7222d64ed817253620908bc187"
 
 [[package]]
+name = "citadel-frontend"
+version = "0.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc31ce9310fd9de8acd336fdf7fc3f2d52a5ecd4a3eb9e18d74a65a356b1108a"
+
+[[package]]
 name = "citadel-middleend"
 version = "0.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f217fe46e0abfea95131fe754d52f9634f1435f2eda6275882a321162583a09"
 dependencies = [
- "citadel-frontend",
+ "citadel-frontend 0.0.11",
 ]
 
 [[package]]
