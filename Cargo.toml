@@ -1,0 +1,11 @@
+[package]
+name = "asgardc"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bumpalo = "3.16.0"
+citadel-api = "*"
+parcer = { git = "https://github.com/Thepigcat76/parcer.git", version = "*" }
