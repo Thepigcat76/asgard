@@ -4,10 +4,11 @@ use bumpalo::Bump;
 use citadel_api::frontend::ir::{
     self,
     irgen::{HIRStream, IRGenerator},
-    FuncStmt, IRStmt, IRTypedIdent,
+    FuncStmt, IRStmt, IRTypedIdent, VarStmt, FLOAT32_T, FLOAT64_T, INT16_T, INT32_T, INT64_T,
 };
 use parcer::ast::{
-    stmt::{BlockStmt, Field, FunctionStmt, Statement},
+    expr::Expression,
+    stmt::{BlockStmt, Field, FunctionStmt, Statement, VariableStmt},
     types::Type,
     Ident,
 };
@@ -15,18 +16,38 @@ use parcer::ast::{
 pub struct Compiler<'c> {
     pub arena: &'c Bump,
     pub out: IRGenerator<'c>,
+
+    global_ctx: Option<CompileCtx<'c>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CompileCtx<'ctx> {
+    // int f() { return 100; }
+    // ^^^              ^^^
+    // |                Expression that is affected
+    // type that is passed
+    FuncRetType(ir::Type<'ctx>),
+    // int x = 100;
+    // ^^^     ^^^
+    // |       Expression that is affected
+    // type that is passed
+    VarType(ir::Type<'ctx>),
 }
 
 impl<'c> Compiler<'c> {
-    pub fn compile_program(ast: Vec<Statement<'c>>, arena: &'c Bump) -> HIRStream<'c> {
-        let mut compiler = Compiler {
+    pub fn new(arena: &'c Bump) -> Self {
+        Self {
             arena,
             out: IRGenerator::default(),
-        };
-        for stmt in ast {
-            compiler.compile_stmt(stmt);
+            global_ctx: Option::default(),
         }
-        compiler.out.stream()
+    }
+
+    pub fn compile_program(mut self, ast: Vec<Statement<'c>>) -> HIRStream<'c> {
+        for stmt in ast {
+            self.compile_stmt(stmt);
+        }
+        self.out.stream()
     }
 
     fn compile_stmt(&mut self, stmt: Statement<'c>) {
@@ -36,7 +57,7 @@ impl<'c> Compiler<'c> {
             Statement::Union(_) => todo!(),
             Statement::Label(_) => todo!(),
             Statement::Function(node) => self.compile_func_stmt(node),
-            Statement::Variable(_) => todo!(),
+            Statement::Variable(node) => self.compile_var_stmt(node),
             Statement::If(_) => todo!(),
             Statement::Switch(_) => todo!(),
             Statement::While(_) => todo!(),
@@ -63,6 +84,67 @@ impl<'c> Compiler<'c> {
         }
     }
 
+    fn compile_var_stmt(&mut self, node: VariableStmt<'c>) {
+        let typed_ident = Self::compile_typed_ident(node.name, node._type);
+        let val = self.compile_expr(
+            node.val.unwrap(),
+            Some(CompileCtx::VarType(typed_ident._type)),
+        );
+        self.out.gen_ir(IRStmt::Variable(VarStmt {
+            name: typed_ident,
+            val,
+            is_const: node.is_const,
+        }));
+    }
+
+    fn compile_block_stmt(&mut self, node: BlockStmt<'c>) -> ir::BlockStmt<'c> {
+        let mut block = Vec::new();
+        mem::swap(self.out.mut_stream_ref().mut_stream_ref(), &mut block);
+        for stmt in node.block {
+            self.compile_stmt(stmt);
+        }
+        mem::swap(self.out.mut_stream_ref().mut_stream_ref(), &mut block);
+        ir::BlockStmt { stmts: block }
+    }
+
+    fn compile_expr(&self, val: Expression<'c>, ctx: Option<CompileCtx<'c>>) -> ir::IRExpr<'c> {
+        match val {
+            Expression::LiteralString(_) => todo!(),
+            Expression::LiteralChar(_) => todo!(),
+            Expression::LiteralShort(node) => {
+                self.compile_lit_expr(ir::Literal::Int16(node), ctx, ir::Type::Ident(INT16_T))
+            },
+            Expression::LiteralInt(node) => {
+                self.compile_lit_expr(ir::Literal::Int32(node), ctx, ir::Type::Ident(INT32_T))
+            }
+            Expression::LiteralLong(_) => todo!(),
+            Expression::LiteralFloat(_) => todo!(),
+            Expression::LiteralDouble(_) => todo!(),
+            Expression::Ident(_) => todo!(),
+            Expression::Prefix(_) => todo!(),
+            Expression::Infix(_) => todo!(),
+            Expression::Post(_) => todo!(),
+            Expression::Call(_) => todo!(),
+        }
+    }
+
+    fn compile_lit_expr(
+        &self,
+        lit: ir::Literal<'c>,
+        ctx: Option<CompileCtx<'c>>,
+        default_type: ir::Type<'c>,
+    ) -> ir::IRExpr<'c> {
+        let default_type = match self.global_ctx {
+            Some(CompileCtx::FuncRetType(t)) => t,
+            _ => default_type,
+        };
+        let lit_type = match ctx {
+            Some(CompileCtx::VarType(t)) => t,
+            _ => default_type,
+        };
+        ir::IRExpr::Literal(lit, lit_type)
+    }
+
     fn compile_typed_ident(ident: Ident<'c>, _type: Type<'c>) -> IRTypedIdent<'c> {
         IRTypedIdent {
             ident,
@@ -72,7 +154,7 @@ impl<'c> Compiler<'c> {
 
     fn compile_type(_type: Type<'c>) -> ir::Type<'c> {
         match _type {
-            Type::Ident(id) => ir::Type::Ident(id),
+            Type::Ident(id) => ir::Type::Ident(Self::compile_ident_type(id)),
             Type::Pointer { .. } => todo!(),
             Type::Array { .. } => todo!(),
             Type::Struct(_) => todo!(),
@@ -91,14 +173,16 @@ impl<'c> Compiler<'c> {
         }
         tis
     }
-    
-    fn compile_block_stmt(&mut self, node: BlockStmt<'c>) -> ir::BlockStmt<'c> {
-        let mut block = Vec::new();
-        mem::swap(self.out.mut_stream_ref().mut_stream_ref(), &mut block);
-        for stmt in node.block {
-            self.compile_stmt(stmt);
+
+    #[inline]
+    fn compile_ident_type(ident: Ident<'c>) -> ir::Ident<'c> {
+        match ident {
+            "short" => INT16_T,
+            "int" => INT32_T,
+            "long" => INT64_T,
+            "float" => FLOAT32_T,
+            "double" => FLOAT64_T,
+            ident => ident,
         }
-        mem::swap(self.out.mut_stream_ref().mut_stream_ref(), &mut block);
-        ir::BlockStmt { stmts: block }
     }
 }
